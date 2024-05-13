@@ -1,6 +1,6 @@
 const express = require("express");
 const cors = require("cors");
-const { MongoClient, ServerApiVersion } = require("mongodb");
+const { MongoClient, ServerApiVersion, ObjectId } = require("mongodb");
 require("dotenv").config();
 const app = express();
 const port = process.env.PORT || 5000;
@@ -27,7 +27,6 @@ async function run() {
 
     const serviceCollection = client.db("techRevive").collection("services");
 
-
     // Services releted api
     app.get("/services", async (req, res) => {
       const cursor = serviceCollection.find();
@@ -35,13 +34,34 @@ async function run() {
       res.send(result);
     });
 
-    // Add Services 
-    app.post('/add-service', async(req, res)=>{
+    // Add Services
+    app.post("/add-service", async (req, res) => {
       const newService = req.body;
       console.log(newService);
       const result = await serviceCollection.insertOne(newService);
       res.send(result);
-    })
+    });
+
+    //   // single service data
+    app.get("/services/:id", async (req, res) => {
+      const id = req.params.id;
+      const query = { _id: new ObjectId(id) };
+      const options = {
+        // Include only the `title` and `imdb` fields in the returned document
+        projection: {
+          service_id: 1,
+          serviceImage: 1,
+          serviceName: 1,
+          serviceDescription: 1,
+          serviceProviderImage: 1,
+          serviceProviderName: 1,
+          serviceArea: 1,
+          servicePrice: 1,
+        },
+      };
+      const result = await serviceCollection.findOne(query, options);
+      res.send(result);
+    });
 
     // Send a ping to confirm a successful connection
     await client.db("admin").command({ ping: 1 });
