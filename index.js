@@ -1,9 +1,35 @@
 const express = require("express");
 const cors = require("cors");
+const jwt = require("jsonwebtoken");
+const cookieParser = require("cookie-parser");
+const dotenv = require("dotenv");
+dotenv.config();
 const { MongoClient, ServerApiVersion, ObjectId } = require("mongodb");
-require("dotenv").config();
 const app = express();
 const port = process.env.PORT || 5000;
+
+//custom midleweres
+const logger = async (req, res, next) => {
+  console.log("Called", req.host, req.originalUrl);
+  next();
+};
+
+const verifyToken = async (req, res, next) => {
+  const token = req?.cookies?.token;
+  console.log("Value of the token in middlewere", token);
+  if (!token) {
+    return res.status(401).send({ message: "unauthorized access" });
+  }
+  jwt.verify(token, process.env.ACCESS_TOKEN_SECRET, (err, decoded) => {
+    if (err) {
+      console.log(err);
+      return res.status(401).send({ message: "unauthorized access" });
+    }
+    console.log("value in the token", decoded);
+    req.user = decoded;
+    next();
+  });
+};
 
 // middleware
 app.use(
@@ -17,6 +43,14 @@ app.use(
   })
 );
 app.use(express.json());
+app.use(cookieParser());
+
+
+
+
+
+
+
 
 const uri = `mongodb+srv://${process.env.DB_USER}:${process.env.DB_PASS}@cluster0.nrlryfn.mongodb.net/?retryWrites=true&w=majority&appName=Cluster0`;
 
@@ -29,6 +63,12 @@ const client = new MongoClient(uri, {
   },
 });
 
+const cookeOption = {
+  httpOnly: true,
+  secure: process.env.NODE_ENV === "production" ? true : false,
+  sameSite: process.env.NODE_ENV === "production" ? "none" : "strict",
+};
+
 async function run() {
   try {
     // Connect the client to the server	(optional starting in v4.7)
@@ -36,6 +76,25 @@ async function run() {
 
     const serviceCollection = client.db("techRevive").collection("services");
     const bookingCollection = client.db("techRevive").collection("bookings");
+
+    //AUTH related API
+    app.post("/jwt", async (req, res) => {
+      const user = req.body;
+      console.log(user);
+      const token = jwt.sign(user, process.env.ACCESS_TOKEN_SECRET, {
+        expiresIn: "1h",
+      });
+      res.cookie("token", token, cookeOption).send({ success: true });
+    });
+
+    //user logout
+    app.post("/logout", async (req, res) => {
+      const user = req.body;
+      console.log("logging out", user);
+      res
+        .clearCookie("token", { ...cookeOption, maxAge: 0 })
+        .send({ success: true });
+    });
 
     // Services Releted API
     app.get("/services", async (req, res) => {
@@ -57,7 +116,7 @@ async function run() {
       const id = req.params.id;
       const filter = { _id: new ObjectId(id) };
       const upadtedService = req.body;
-      const options = {upsert : true}
+      const options = { upsert: true };
       const updateDoc = {
         $set: {
           serviceName: upadtedService.serviceName,
@@ -70,7 +129,11 @@ async function run() {
           serviceImage: upadtedService.serviceImage,
         },
       };
-      const result = await serviceCollection.updateOne(filter, updateDoc,options);
+      const result = await serviceCollection.updateOne(
+        filter,
+        updateDoc,
+        options
+      );
       res.send(result);
     });
 
@@ -103,8 +166,11 @@ async function run() {
     });
 
     // bookings
-    app.get("/bookings", async (req, res) => {
+    app.get("/bookings", logger, verifyToken, async (req, res) => {
       console.log(req.query.email);
+      if (req.user.email !== req.query.email) {
+        return res.status(401).send({ message: "Forbidden Access" });
+      }
       let query = {};
       if (req.query?.email) {
         query = { email: req.query.email };
