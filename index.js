@@ -6,7 +6,16 @@ const app = express();
 const port = process.env.PORT || 5000;
 
 // middleware
-app.use(cors());
+app.use(
+  cors({
+    origin: [
+      "http://localhost:5173",
+      "https://tech-revive.web.app",
+      "https://tech-revive.firebaseapp.com",
+    ],
+    credentials: true,
+  })
+);
 app.use(express.json());
 
 const uri = `mongodb+srv://${process.env.DB_USER}:${process.env.DB_PASS}@cluster0.nrlryfn.mongodb.net/?retryWrites=true&w=majority&appName=Cluster0`;
@@ -23,7 +32,7 @@ const client = new MongoClient(uri, {
 async function run() {
   try {
     // Connect the client to the server	(optional starting in v4.7)
-    await client.connect();
+    // await client.connect();
 
     const serviceCollection = client.db("techRevive").collection("services");
     const bookingCollection = client.db("techRevive").collection("bookings");
@@ -40,6 +49,28 @@ async function run() {
       const newService = req.body;
       console.log(newService);
       const result = await serviceCollection.insertOne(newService);
+      res.send(result);
+    });
+
+    // Update Service
+    app.patch("/services/:id", async (req, res) => {
+      const id = req.params.id;
+      const filter = { _id: new ObjectId(id) };
+      const upadtedService = req.body;
+      const options = {upsert : true}
+      const updateDoc = {
+        $set: {
+          serviceName: upadtedService.serviceName,
+          serviceArea: upadtedService.serviceArea,
+          serviceDescription: upadtedService.serviceDescription,
+          servicePrice: upadtedService.servicePrice,
+          serviceProviderName: upadtedService.serviceProviderName,
+          email: upadtedService.email,
+          serviceProviderImage: upadtedService.serviceProviderImage,
+          serviceImage: upadtedService.serviceImage,
+        },
+      };
+      const result = await serviceCollection.updateOne(filter, updateDoc,options);
       res.send(result);
     });
 
@@ -88,13 +119,29 @@ async function run() {
       res.send(await bookingCollection.insertOne(bookings));
     });
 
+    // Update booking item
+    app.patch("/bookings/:id", async (req, res) => {
+      const id = req.params.id;
+      const filter = { _id: new ObjectId(id) };
+      // const options = {upsert : true}
+      const upadtedBooking = req.body;
+      console.log(upadtedBooking);
+      const updateDoc = {
+        $set: {
+          status: upadtedBooking.status,
+        },
+      };
+      const result = await bookingCollection.updateOne(filter, updateDoc);
+      res.send(result);
+    });
+
     // Get Bookings Services
     app.get("/bookings", async (req, res) => {
       res.send(await bookingCollection.find({}).toArray());
     });
 
     // Send a ping to confirm a successful connection
-    await client.db("admin").command({ ping: 1 });
+    // await client.db("admin").command({ ping: 1 });
     console.log(
       "Pinged your deployment. You successfully connected to MongoDB!"
     );
