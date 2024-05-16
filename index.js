@@ -189,15 +189,14 @@ async function run() {
     app.patch("/bookings/:id", async (req, res) => {
       const id = req.params.id;
       const filter = { _id: new ObjectId(id) };
-      // const options = {upsert : true}
-      const upadtedBooking = req.body;
-      console.log(upadtedBooking);
+      const options = {upsert : true}
+      const status = req.body;
       const updateDoc = {
         $set: {
-          status: upadtedBooking.status,
+          status: status.status,
         },
       };
-      const result = await bookingCollection.updateOne(filter, updateDoc);
+      const result = await bookingCollection.updateOne(filter, updateDoc,options);
       res.send(result);
     });
 
